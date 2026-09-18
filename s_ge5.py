@@ -10,14 +10,13 @@
 
 import math
 import io
-import pandas as pd
-import streamlit as st
-import streamlit.components.v1 as components
-import plotly.graph_objects as go
-import base64
 import os
+import base64
 import tempfile
 from pathlib import Path
+import pandas as pd
+import streamlit as st
+import plotly.graph_objects as go
 
 # 실제 파일 생성용 라이브러리
 from reportlab.lib import colors
@@ -31,7 +30,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.shared import Mm, Pt
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -107,11 +106,10 @@ def compute_contact_pressure(W, b, L, is_dump=False):
     return round(W / (2 * b * L), 2)
 
 # ------------------------------------------------------------------
-# 2. 기본 장비 데이터베이스 (DCM 최하단 배치 및 체크해제)
+# 2. 기본 장비 데이터베이스
 # ------------------------------------------------------------------
 
 DEFAULT_EQUIPMENT = [
-    # 상단 기본 검토 장비 (검토포함: True)
     {"검토포함": True, "장비명": "도저", "규격": "6t", "중량W(kN)": 64.1, "폭b(m)": 0.71, "길이L(m)": 2.03, "덤프특수식": False},
     {"검토포함": True, "장비명": "도저", "규격": "13t", "중량W(kN)": 131.0, "폭b(m)": 0.77, "길이L(m)": 2.61, "덤프특수식": False},
     {"검토포함": True, "장비명": "도저", "규격": "19t", "중량W(kN)": 190.0, "폭b(m)": 0.76, "길이L(m)": 2.80, "덤프특수식": False},
@@ -119,7 +117,6 @@ DEFAULT_EQUIPMENT = [
     {"검토포함": True, "장비명": "도저", "규격": "30t", "중량W(kN)": 348.9, "폭b(m)": 0.63, "길이L(m)": 3.21, "덤프특수식": False},
     {"검토포함": True, "장비명": "덤프트럭", "규격": "15t", "중량W(kN)": 260.0, "폭b(m)": 0.20, "길이L(m)": 0.50, "덤프특수식": True},
     {"검토포함": True, "장비명": "덤프트럭", "규격": "24t", "중량W(kN)": 432.0, "폭b(m)": 0.23, "길이L(m)": 0.58, "덤프특수식": True},
-    # 하단 배치 및 체크해제 장비 (검토포함: False)
     {"검토포함": False, "장비명": "백호(Back hoe)", "규격": "25t", "중량W(kN)": 268.0, "폭b(m)": 0.60, "길이L(m)": 3.61, "덤프특수식": False},
     {"검토포함": False, "장비명": "PBD", "규격": "50t", "중량W(kN)": 855.9, "폭b(m)": 1.20, "길이L(m)": 7.67, "덤프특수식": False},
     {"검토포함": False, "장비명": "PBD", "규격": "106t", "중량W(kN)": 1056.0, "폭b(m)": 1.40, "길이L(m)": 9.09, "덤프특수식": False},
@@ -128,7 +125,7 @@ DEFAULT_EQUIPMENT = [
 ]
 
 # ------------------------------------------------------------------
-# 3. 사이드바 - 계산서 표지정보 및 지반정수
+# 3. 사이드바 설정
 # ------------------------------------------------------------------
 
 st.sidebar.header("📋 계산서 표지 정보")
@@ -326,23 +323,25 @@ if st.button("▶ 검토 실행", type="primary") or "last_summary" in st.sessio
     st.plotly_chart(fig, use_container_width=True, key="main_result_chart")
 
 # ------------------------------------------------------------------
-# 7. 인쇄용 구조계산서 - 실제 PDF/Word/Excel 생성
+# 7. 인쇄용 구조계산서 - 파일 생성 유틸리티 및 렌더링
 # ------------------------------------------------------------------
 
 st.divider()
 st.subheader("🖨️ 인쇄용 구조계산서 보기 및 출력/다운로드")
-st.caption("화면에 표시되는 구조계산서와 동일한 구성으로 A4 페이지에 맞춰 PDF·Word·Excel을 생성합니다. 다중 장비/다중 복토두께도 페이지가 겹치지 않도록 자동 분할합니다.")
-
+st.caption("화면에 표시되는 구조계산서와 동일한 구성으로 A4 페이지에 맞춰 PDF·Word·Excel을 생성합니다.")
 
 def _img_from_b64(b64, suffix='.png'):
+    """Base64 데이터를 디스크 상의 임시 파일로 안전하게 기록합니다."""
+    img_bytes = base64.b64decode(b64)
     f = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    f.write(base64.b64decode(b64))
+    f.write(img_bytes)
+    f.flush()
+    os.fsync(f.fileno())
     f.close()
     return f.name
 
-
 def _make_chart_png(summary_df):
-    """Plotly 그래프를 PNG로 변환. kaleido가 없으면 matplotlib로 대체."""
+    """Plotly 그래프를 PNG 바이너리 데이터로 변환합니다."""
     try:
         fig = go.Figure()
         x = [f"{n}({sp})" for n, sp in zip(summary_df['장비명'], summary_df['규격'])]
@@ -355,10 +354,10 @@ def _make_chart_png(summary_df):
         import matplotlib.pyplot as plt
         labels = [f"{n}({sp})" for n, sp in zip(summary_df['장비명'], summary_df['규격'])]
         fig, ax = plt.subplots(figsize=(10, 5.0))
-        x = range(len(labels))
-        ax.bar(list(x), summary_df['작용응력σ(kPa)'], label='작용응력 σ')
-        ax.plot(list(x), summary_df['허용지지력qa(kPa)'], marker='o', label='허용지지력 qa')
-        ax.set_xticks(list(x))
+        x_range = range(len(labels))
+        ax.bar(list(x_range), summary_df['작용응력σ(kPa)'], label='작용응력 σ')
+        ax.plot(list(x_range), summary_df['허용지지력qa(kPa)'], marker='o', label='허용지지력 qa')
+        ax.set_xticks(list(x_range))
         ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
         ax.set_ylabel('kPa')
         ax.set_title('장비별 작용응력(σ) vs 허용지지력(qa)')
@@ -370,9 +369,8 @@ def _make_chart_png(summary_df):
         plt.close(fig)
         return bio.getvalue()
 
-
 def _make_formula_images():
-    """수식을 문자 나열이 아니라 실제 수식 이미지로 생성."""
+    """Matplotlib을 사용해 수식 이미지를 바이트 데이터로 생성합니다."""
     import matplotlib.pyplot as plt
     formulas = {
       'P': r'$P=\frac{W}{2\,b\,L}$   (덤프트럭: $P=\frac{0.4W}{bL}$)',
@@ -391,7 +389,6 @@ def _make_formula_images():
         out[k] = bio.getvalue()
     return out
 
-
 def _safe_pdf_font():
     candidates = [
       r'C:\Windows\Fonts\malgun.ttf', r'C:\Windows\Fonts\malgunbd.ttf',
@@ -406,7 +403,6 @@ def _safe_pdf_font():
             except Exception:
                 pass
     return 'Helvetica'
-
 
 def _pdf_table(data, widths, header=True, font='Helvetica', fontsize=7.2):
     t = Table(data, colWidths=widths, repeatRows=1 if header else 0, hAlign='CENTER')
@@ -426,6 +422,27 @@ def _pdf_table(data, widths, header=True, font='Helvetica', fontsize=7.2):
     t.setStyle(TableStyle(cmds))
     return t
 
+def _add_docx_picture_safely(doc, img_src, width=None):
+    """
+    python-docx에 이미지를 안전하게 추가하는 함수.
+    경로(str) 또는 io.BytesIO 스트림 형태를 모두 지원하며, 
+    유효성을 검증하여 UnexpectedEndOfFileError를 예방합니다.
+    """
+    try:
+        if isinstance(img_src, str):
+            if os.path.exists(img_src) and os.path.getsize(img_src) > 0:
+                doc.add_picture(img_src, width=width)
+            else:
+                print(f"[Warning] 유효하지 않은 파일 경로이거나 0바이트 파일입니다: {img_src}")
+        elif isinstance(img_src, io.BytesIO):
+            img_src.seek(0)
+            doc.add_picture(img_src, width=width)
+        elif isinstance(img_src, bytes):
+            stream = io.BytesIO(img_src)
+            stream.seek(0)
+            doc.add_picture(stream, width=width)
+    except Exception as e:
+        print(f"[Error] DOCX 이미지 삽입 실패: {e}")
 
 def build_pdf(summary_df, matrix_df, selected_thicknesses, params, proj_name, theory_paths, formula_paths, chart_path):
     font = _safe_pdf_font()
@@ -438,7 +455,6 @@ def build_pdf(summary_df, matrix_df, selected_thicknesses, params, proj_name, th
     sec = ParagraphStyle('sec', parent=body, fontSize=11, fontName=font, leading=14, spaceBefore=5, spaceAfter=5)
     story = []
     
-    # 표지/제목
     story.append(_pdf_table([[Paragraph('<b>PROJECT</b>', body), Paragraph(proj_name if proj_name.strip() else '&nbsp;', body)]], [32*mm, 142*mm], font=font, fontsize=9))
     story.append(Spacer(1, 5*mm))
     story.append(Paragraph('장비주행성 검토 구조계산서', title))
@@ -469,7 +485,6 @@ def build_pdf(summary_df, matrix_df, selected_thicknesses, params, proj_name, th
     story.append(RLImage(theory_paths['B'], width=178*mm, height=62*mm, kind='bound'))
     story.append(Spacer(1, 3*mm))
 
-    # 복토두께별 응력표: 폭이 넘으면 열을 여러 페이지로 분할
     story.append(PageBreak())
     story.append(Paragraph('2. 복토 두께별 작용응력', sec))
     chunk_size = 8
@@ -485,7 +500,6 @@ def build_pdf(summary_df, matrix_df, selected_thicknesses, params, proj_name, th
         if start + chunk_size < len(selected_thicknesses):
             story.append(PageBreak())
 
-    # 결과표: 장비 수에 따라 행 페이지 분할
     story.append(PageBreak())
     story.append(Paragraph('3. 장비주행성 검토결과', sec))
     hdr = ['장비명', '규격', 'P\n(kPa)', 'b\n(m)', 'L\n(m)', 'H\n(m)', 'σ\n(kPa)', 'qa\n(kPa)', 'qa/σ', '판정']
@@ -505,7 +519,6 @@ def build_pdf(summary_df, matrix_df, selected_thicknesses, params, proj_name, th
     story.append(RLImage(chart_path, width=178*mm, height=89*mm, kind='bound'))
     doc.build(story)
     return path
-
 
 def build_docx(summary_df, matrix_df, selected_thicknesses, params, proj_name, theory_paths, formula_paths, chart_path):
     doc = Document()
@@ -532,7 +545,7 @@ def build_docx(summary_df, matrix_df, selected_thicknesses, params, proj_name, t
     doc.add_heading('1. 적용 이론 및 산정식', level=1)
     for lab, key in [('가. 장비 접지압(P) 자동 산정식', 'P'), ('나. 원지반상 작용응력(σ) — 하중분산 응력법', 'sigma'), ('다. 허용지지력(qa) — Meyerhof and Hanna(1978)', 'qa')]:
         doc.add_paragraph(lab).runs[0].bold = True
-        doc.add_picture(formula_paths[key], width=Mm(175))
+        _add_docx_picture_safely(doc, formula_paths[key], width=Mm(175))
         
     doc.add_paragraph('설계 적용 매개변수').runs[0].bold = True
     tb = doc.add_table(rows=2, cols=9)
@@ -544,8 +557,10 @@ def build_docx(summary_df, matrix_df, selected_thicknesses, params, proj_name, t
         tb.cell(1, j).text = f'{vals[j]:.2f}'
         
     doc.add_paragraph('수식 주요 변수: W 장비 총중량, b 접지폭, L 접지길이, H 복토두께, P 접지압, σ 원지반 작용응력, qa 허용지지력, γ1 복토층 단위중량, c2 원지반 점착력, φ1·φ2 내부마찰각, Ks 펀칭전단계수, θ 분산/보강각도, T 토목섬유 허용인장력, Fs 안전율.')
-    doc.add_picture(theory_paths['A'], width=Mm(175))
-    doc.add_picture(theory_paths['B'], width=Mm(175))
+    
+    # 안전한 이미지 삽입 함수를 사용하여 UnexpectedEndOfFileError 원인 차단
+    _add_docx_picture_safely(doc, theory_paths['A'], width=Mm(175))
+    _add_docx_picture_safely(doc, theory_paths['B'], width=Mm(175))
     doc.add_page_break()
     
     doc.add_heading('2. 복토 두께별 작용응력', level=1)
@@ -582,11 +597,11 @@ def build_docx(summary_df, matrix_df, selected_thicknesses, params, proj_name, t
             
     doc.add_page_break()
     doc.add_heading('4. 장비별 작용응력(σ) vs 허용지지력(qa) 비교 그래프', level=1)
-    doc.add_picture(chart_path, width=Mm(175))
+    _add_docx_picture_safely(doc, chart_path, width=Mm(175))
+    
     path = tempfile.NamedTemporaryFile(delete=False, suffix='.docx').name
     doc.save(path)
     return path
-
 
 def build_xlsx(summary_df, matrix_df, selected_thicknesses, params, proj_name, theory_paths, formula_paths, chart_path):
     wb = Workbook()
@@ -746,11 +761,13 @@ if st.checkbox("🖨️ 인쇄용 구조계산서 양식 열기", value=False, k
                 formula_paths = {k: _img_from_b64(base64.b64encode(v).decode()) for k, v in formula_bytes.items()}
                 chart_bytes = _make_chart_png(summary_df)
                 chart_path = _img_from_b64(base64.b64encode(chart_bytes).decode())
+                
                 params = {
                     'gamma1': gamma1, 'c2': c2, 'phi1': phi1, 'phi2': phi2,
                     'Ks': ks_lookup(phi1), 'theta': theta_geo, 'T': T_allow,
                     'impact': impact, 'Fs': Fs
                 }
+                
                 pdf_path = build_pdf(summary_df, matrix_df, selected_thicknesses, params, proj_name, {'A': a_path, 'B': b_path}, formula_paths, chart_path)
                 docx_path = build_docx(summary_df, matrix_df, selected_thicknesses, params, proj_name, {'A': a_path, 'B': b_path}, formula_paths, chart_path)
                 xlsx_path = build_xlsx(summary_df, matrix_df, selected_thicknesses, params, proj_name, {'A': a_path, 'B': b_path}, formula_paths, chart_path)
@@ -764,7 +781,7 @@ if st.checkbox("🖨️ 인쇄용 구조계산서 양식 열기", value=False, k
                 st.session_state.generated_files = {'pdf': pdf_data, 'docx': docx_data, 'xlsx': xlsx_data}
                 
         if 'generated_files' in st.session_state:
-            st.success('A4 구조계산서 파일이 생성되었습니다. 각 파일은 수식·삽도·결과 그래프를 포함합니다.')
+            st.success('A4 구조계산서 파일이 생성되었습니다.')
             st.download_button('📄 PDF 다운로드', st.session_state.generated_files['pdf'], '장비주행성_구조계산서_A4.pdf', 'application/pdf', key='download_a4_pdf')
             st.download_button('📝 Word 다운로드', st.session_state.generated_files['docx'], '장비주행성_구조계산서_A4.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', key='download_a4_docx')
             st.download_button('📊 Excel 다운로드', st.session_state.generated_files['xlsx'], '장비주행성_구조계산서_A4.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key='download_a4_xlsx')
