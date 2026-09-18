@@ -325,6 +325,7 @@ if st.button("▶ 검토 실행", type="primary") or "last_summary" in st.sessio
     st.session_state.last_fig = fig
     st.plotly_chart(fig, use_container_width=True, key="main_result_chart")
 
+# ------------------------------------------------------------------
 # 7. 인쇄용 구조계산서 - 실제 PDF/Word/Excel 생성
 # ------------------------------------------------------------------
 
@@ -348,17 +349,26 @@ def _make_chart_png(summary_df):
         fig.add_trace(go.Bar(x=x, y=summary_df['작용응력σ(kPa)'], name='작용응력 σ'))
         fig.add_trace(go.Scatter(x=x, y=summary_df['허용지지력qa(kPa)'], name='허용지지력 qa', mode='lines+markers'))
         fig.update_layout(title='장비별 작용응력(σ) vs 허용지지력(qa)', xaxis_title='장비', yaxis_title='kPa',
-                          autosize=False, width=1000, height=500, margin=dict(l=70,r=30,t=70,b=120))
+                          autosize=False, width=1000, height=500, margin=dict(l=70, r=30, t=70, b=120))
         return fig.to_image(format='png', width=1000, height=500, scale=2)
     except Exception:
         import matplotlib.pyplot as plt
-        labels=[f"{n}({sp})" for n,sp in zip(summary_df['장비명'],summary_df['규격'])]
-        fig,ax=plt.subplots(figsize=(10,5.0))
-        x=range(len(labels)); ax.bar(list(x), summary_df['작용응력σ(kPa)'], label='작용응력 σ')
+        labels = [f"{n}({sp})" for n, sp in zip(summary_df['장비명'], summary_df['규격'])]
+        fig, ax = plt.subplots(figsize=(10, 5.0))
+        x = range(len(labels))
+        ax.bar(list(x), summary_df['작용응력σ(kPa)'], label='작용응력 σ')
         ax.plot(list(x), summary_df['허용지지력qa(kPa)'], marker='o', label='허용지지력 qa')
-        ax.set_xticks(list(x)); ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
-        ax.set_ylabel('kPa'); ax.set_title('장비별 작용응력(σ) vs 허용지지력(qa)'); ax.grid(axis='y', alpha=.25); ax.legend()
-        fig.tight_layout(); bio=io.BytesIO(); fig.savefig(bio,format='png',dpi=180); plt.close(fig); return bio.getvalue()
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
+        ax.set_ylabel('kPa')
+        ax.set_title('장비별 작용응력(σ) vs 허용지지력(qa)')
+        ax.grid(axis='y', alpha=.25)
+        ax.legend()
+        fig.tight_layout()
+        bio = io.BytesIO()
+        fig.savefig(bio, format='png', dpi=180)
+        plt.close(fig)
+        return bio.getvalue()
 
 
 def _make_formula_images():
@@ -369,17 +379,21 @@ def _make_formula_images():
       'sigma': r'$\sigma=\frac{P\,b\,L\,(1+\varepsilon)}{(b+2H\tan\theta)(L+2H\tan\theta)}+\gamma_1H$',
       'qa': r'$q_a=\frac{1}{F_s}\left[\left(1+0.2\frac{b}{L}\right)c_2N_{c(2)}F_{cs(2)}F_{cd(2)}+\gamma_1H^2\left(1+\frac{b}{L}\right)\frac{K_s\tan\phi_1}{b}+\frac{2T\sin\theta}{b+H}\right]$'
     }
-    out={}
-    for k,formula in formulas.items():
-        fig=plt.figure(figsize=(11,0.85)); fig.patch.set_alpha(0)
-        fig.text(.02,.48,formula,fontsize=17,va='center')
-        plt.axis('off'); bio=io.BytesIO(); fig.savefig(bio,format='png',dpi=220,bbox_inches='tight',pad_inches=.08,transparent=True); plt.close(fig)
-        out[k]=bio.getvalue()
+    out = {}
+    for k, formula in formulas.items():
+        fig = plt.figure(figsize=(11, 0.85))
+        fig.patch.set_alpha(0)
+        fig.text(.02, .48, formula, fontsize=17, va='center')
+        plt.axis('off')
+        bio = io.BytesIO()
+        fig.savefig(bio, format='png', dpi=220, bbox_inches='tight', pad_inches=.08, transparent=True)
+        plt.close(fig)
+        out[k] = bio.getvalue()
     return out
 
 
 def _safe_pdf_font():
-    candidates=[
+    candidates = [
       r'C:\Windows\Fonts\malgun.ttf', r'C:\Windows\Fonts\malgunbd.ttf',
       '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
       '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
@@ -387,181 +401,370 @@ def _safe_pdf_font():
     for fp in candidates:
         if os.path.exists(fp):
             try:
-                pdfmetrics.registerFont(TTFont('Korean',fp)); return 'Korean'
-            except Exception: pass
+                pdfmetrics.registerFont(TTFont('Korean', fp))
+                return 'Korean'
+            except Exception:
+                pass
     return 'Helvetica'
 
 
 def _pdf_table(data, widths, header=True, font='Helvetica', fontsize=7.2):
-    t=Table(data,colWidths=widths,repeatRows=1 if header else 0,hAlign='CENTER')
-    cmds=[('GRID',(0,0),(-1,-1),0.35,colors.black),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-          ('ALIGN',(0,0),(-1,-1),'CENTER'),('FONTNAME',(0,0),(-1,-1),font),('FONTSIZE',(0,0),(-1,-1),fontsize),
-          ('LEFTPADDING',(0,0),(-1,-1),2),('RIGHTPADDING',(0,0),(-1,-1),2),('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3)]
-    if header: cmds += [('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e9eef4')),('FONTNAME',(0,0),(-1,0),font)]
-    t.setStyle(TableStyle(cmds)); return t
+    t = Table(data, colWidths=widths, repeatRows=1 if header else 0, hAlign='CENTER')
+    cmds = [
+        ('GRID', (0, 0), (-1, -1), 0.35, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, -1), font),
+        ('FONTSIZE', (0, 0), (-1, -1), fontsize),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3)
+    ]
+    if header:
+        cmds += [('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e9eef4')), ('FONTNAME', (0, 0), (-1, 0), font)]
+    t.setStyle(TableStyle(cmds))
+    return t
 
 
-def build_pdf(summary_df,matrix_df,selected_thicknesses,params,proj_name,theory_paths,formula_paths,chart_path):
-    font=_safe_pdf_font(); path=tempfile.NamedTemporaryFile(delete=False,suffix='.pdf').name
-    doc=SimpleDocTemplate(path,pagesize=A4,rightMargin=12*mm,leftMargin=12*mm,topMargin=12*mm,bottomMargin=12*mm,
-                          title='장비주행성 검토 구조계산서')
-    styles=getSampleStyleSheet(); body=ParagraphStyle('kr',parent=styles['BodyText'],fontName=font,fontSize=8.5,leading=12,spaceAfter=4)
-    title=ParagraphStyle('title',parent=body,fontSize=16,leading=20,alignment=TA_CENTER,spaceAfter=8)
-    sec=ParagraphStyle('sec',parent=body,fontSize=11,fontName=font,leading=14,spaceBefore=5,spaceAfter=5)
-    story=[]
+def build_pdf(summary_df, matrix_df, selected_thicknesses, params, proj_name, theory_paths, formula_paths, chart_path):
+    font = _safe_pdf_font()
+    path = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf').name
+    doc = SimpleDocTemplate(path, pagesize=A4, rightMargin=12*mm, leftMargin=12*mm, topMargin=12*mm, bottomMargin=12*mm,
+                            title='장비주행성 검토 구조계산서')
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle('kr', parent=styles['BodyText'], fontName=font, fontSize=8.5, leading=12, spaceAfter=4)
+    title = ParagraphStyle('title', parent=body, fontSize=16, leading=20, alignment=TA_CENTER, spaceAfter=8)
+    sec = ParagraphStyle('sec', parent=body, fontSize=11, fontName=font, leading=14, spaceBefore=5, spaceAfter=5)
+    story = []
+    
     # 표지/제목
-    story.append(_pdf_table([[Paragraph('<b>PROJECT</b>',body),Paragraph(proj_name if proj_name.strip() else '&nbsp;',body)]],[32*mm,142*mm],font=font,fontsize=9)); story.append(Spacer(1,5*mm))
-    story.append(Paragraph('장비주행성 검토 구조계산서',title))
-    story.append(Paragraph('1. 적용 이론 및 산정식',sec))
-    labels=[('가. 장비 접지압(P) 자동 산정식','P'),('나. 원지반상 작용응력(σ) — 하중분산 응력법','sigma'),('다. 허용지지력(qa) — Meyerhof and Hanna(1978)','qa')]
-    for lab,key in labels:
-        # RLImage에서 잘못된 속성(preserveAspectRatio, anchor)을 제거하고 kind='bound' 적용
-        img=RLImage(formula_paths[key],width=172*mm,height=13*mm,kind='bound')
-        story.append(KeepTogether([Paragraph(lab,body),img,Spacer(1,2*mm)]))
-    story.append(Paragraph('<b>[설계 적용 매개변수]</b>',body))
-    pheaders=['γ1(kN/m³)','c2(kPa)','φ1(°)','φ2(°)','Ks','θ(°)','T(kN/m)','ε','Fs']
-    pvals=[f"{params['gamma1']:.1f}",f"{params['c2']:.1f}",f"{params['phi1']:.1f}",f"{params['phi2']:.1f}",f"{params['Ks']:.2f}",f"{params['theta']:.1f}",f"{params['T']:.1f}",f"{params['impact']:.2f}",f"{params['Fs']:.1f}"]
-    story.append(_pdf_table([pheaders,pvals],[18.5*mm]*9,font=font,fontsize=6.3)); story.append(Spacer(1,2*mm))
-    story.append(Paragraph('수식 주요 변수: W 장비 총중량, b 접지폭, L 접지길이, H 복토두께, P 접지압, σ 원지반 작용응력, qa 허용지지력, γ1 복토층 단위중량, c2 원지반 점착력, φ1·φ2 내부마찰각, Ks 펀칭전단계수, θ 분산/보강각도, T 토목섬유 허용인장력, Fs 안전율.',body))
-    story.append(Spacer(1,2*mm)); story.append(RLImage(theory_paths['A'],width=178*mm,height=62*mm,kind='bound')); story.append(Spacer(1,2*mm)); story.append(RLImage(theory_paths['B'],width=178*mm,height=62*mm,kind='bound')); story.append(Spacer(1,3*mm))
+    story.append(_pdf_table([[Paragraph('<b>PROJECT</b>', body), Paragraph(proj_name if proj_name.strip() else '&nbsp;', body)]], [32*mm, 142*mm], font=font, fontsize=9))
+    story.append(Spacer(1, 5*mm))
+    story.append(Paragraph('장비주행성 검토 구조계산서', title))
+    story.append(Paragraph('1. 적용 이론 및 산정식', sec))
+    
+    labels = [
+        ('가. 장비 접지압(P) 자동 산정식', 'P'),
+        ('나. 원지반상 작용응력(σ) — 하중분산 응력법', 'sigma'),
+        ('다. 허용지지력(qa) — Meyerhof and Hanna(1978)', 'qa')
+    ]
+    for lab, key in labels:
+        img = RLImage(formula_paths[key], width=172*mm, height=13*mm, kind='bound')
+        story.append(KeepTogether([Paragraph(lab, body), img, Spacer(1, 2*mm)]))
+        
+    story.append(Paragraph('<b>[설계 적용 매개변수]</b>', body))
+    pheaders = ['γ1(kN/m³)', 'c2(kPa)', 'φ1(°)', 'φ2(°)', 'Ks', 'θ(°)', 'T(kN/m)', 'ε', 'Fs']
+    pvals = [
+        f"{params['gamma1']:.1f}", f"{params['c2']:.1f}", f"{params['phi1']:.1f}",
+        f"{params['phi2']:.1f}", f"{params['Ks']:.2f}", f"{params['theta']:.1f}",
+        f"{params['T']:.1f}", f"{params['impact']:.2f}", f"{params['Fs']:.1f}"
+    ]
+    story.append(_pdf_table([pheaders, pvals], [18.5*mm]*9, font=font, fontsize=6.3))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph('수식 주요 변수: W 장비 총중량, b 접지폭, L 접지길이, H 복토두께, P 접지압, σ 원지반 작용응력, qa 허용지지력, γ1 복토층 단위중량, c2 원지반 점착력, φ1·φ2 내부마찰각, Ks 펀칭전단계수, θ 분산/보강각도, T 토목섬유 허용인장력, Fs 안전율.', body))
+    story.append(Spacer(1, 2*mm))
+    story.append(RLImage(theory_paths['A'], width=178*mm, height=62*mm, kind='bound'))
+    story.append(Spacer(1, 2*mm))
+    story.append(RLImage(theory_paths['B'], width=178*mm, height=62*mm, kind='bound'))
+    story.append(Spacer(1, 3*mm))
 
     # 복토두께별 응력표: 폭이 넘으면 열을 여러 페이지로 분할
-    story.append(PageBreak()); story.append(Paragraph('2. 복토 두께별 작용응력',sec))
-    chunk_size=8
-    for start in range(0,len(selected_thicknesses),chunk_size):
-        hs=selected_thicknesses[start:start+chunk_size]
-        hdr=['장비명','규격','P(kPa)']+[f'σ({h:.1f}m)' for h in hs]
-        data=[hdr]
-        for _,r in matrix_df.iterrows(): data.append([r['장비명'],r['규격'],f"{r['접지압P(kPa)']:.2f}"]+[f"{r.get(f'σ({h:.1f}m)','-'):.2f}" if isinstance(r.get(f'σ({h:.1f}m)'),(int,float)) else '-' for h in hs])
-        widths=[26*mm,18*mm,17*mm]+[15*mm]*len(hs)
-        story.append(_pdf_table(data,widths,font=font,fontsize=6.6)); story.append(Spacer(1,4*mm))
-        if start+chunk_size<len(selected_thicknesses): story.append(PageBreak())
+    story.append(PageBreak())
+    story.append(Paragraph('2. 복토 두께별 작용응력', sec))
+    chunk_size = 8
+    for start in range(0, len(selected_thicknesses), chunk_size):
+        hs = selected_thicknesses[start:start+chunk_size]
+        hdr = ['장비명', '규격', 'P(kPa)'] + [f'σ({h:.1f}m)' for h in hs]
+        data = [hdr]
+        for _, r in matrix_df.iterrows():
+            data.append([r['장비명'], r['규격'], f"{r['접지압P(kPa)']:.2f}"] + [f"{r.get(f'σ({h:.1f}m)','-'):.2f}" if isinstance(r.get(f'σ({h:.1f}m)'), (int, float)) else '-' for h in hs])
+        widths = [26*mm, 18*mm, 17*mm] + [15*mm]*len(hs)
+        story.append(_pdf_table(data, widths, font=font, fontsize=6.6))
+        story.append(Spacer(1, 4*mm))
+        if start + chunk_size < len(selected_thicknesses):
+            story.append(PageBreak())
 
-    # 결과표: 장비 수에 따라 행 페이지 분할, 절대 한 페이지에 억지로 압축하지 않음
-    story.append(PageBreak()); story.append(Paragraph('3. 장비주행성 검토결과',sec))
-    hdr=['장비명','규격','P\n(kPa)','b\n(m)','L\n(m)','H\n(m)','σ\n(kPa)','qa\n(kPa)','qa/σ','판정']
-    for start in range(0,len(summary_df),15):
-        part=summary_df.iloc[start:start+15]; data=[hdr]
-        for _,r in part.iterrows(): data.append([r['장비명'],r['규격'],f"{r['접지압P(kPa)']:.2f}",f"{r['폭b(m)']:.2f}",f"{r['길이L(m)']:.2f}",f"{r['복토두께H(m)']:.1f}",f"{r['작용응력σ(kPa)']:.2f}",f"{r['허용지지력qa(kPa)']:.2f}",f"{r['안전율(qa/σ)']:.2f}",r['판정']])
-        t=_pdf_table(data,[25*mm,18*mm,17*mm,13*mm,13*mm,13*mm,18*mm,18*mm,15*mm,15*mm],font=font,fontsize=6.7)
-        t.setStyle(TableStyle([('TEXTCOLOR',(-1,1),(-1,-1),colors.black)])); story.append(t)
-        if start+15<len(summary_df): story.append(PageBreak())
-    story.append(PageBreak()); story.append(Paragraph('4. 장비별 작용응력(σ) vs 허용지지력(qa) 비교 그래프',sec))
-    story.append(RLImage(chart_path,width=178*mm,height=89*mm,kind='bound'))
+    # 결과표: 장비 수에 따라 행 페이지 분할
+    story.append(PageBreak())
+    story.append(Paragraph('3. 장비주행성 검토결과', sec))
+    hdr = ['장비명', '규격', 'P\n(kPa)', 'b\n(m)', 'L\n(m)', 'H\n(m)', 'σ\n(kPa)', 'qa\n(kPa)', 'qa/σ', '판정']
+    for start in range(0, len(summary_df), 15):
+        part = summary_df.iloc[start:start+15]
+        data = [hdr]
+        for _, r in part.iterrows():
+            data.append([r['장비명'], r['규격'], f"{r['접지압P(kPa)']:.2f}", f"{r['폭b(m)']:.2f}", f"{r['길이L(m)']:.2f}", f"{r['복토두께H(m)']:.1f}", f"{r['작용응력σ(kPa)']:.2f}", f"{r['허용지지력qa(kPa)']:.2f}", f"{r['안전율(qa/σ)']:.2f}", r['판정']])
+        t = _pdf_table(data, [25*mm, 18*mm, 17*mm, 13*mm, 13*mm, 13*mm, 18*mm, 18*mm, 15*mm, 15*mm], font=font, fontsize=6.7)
+        t.setStyle(TableStyle([('TEXTCOLOR', (-1, 1), (-1, -1), colors.black)]))
+        story.append(t)
+        if start + 15 < len(summary_df):
+            story.append(PageBreak())
+            
+    story.append(PageBreak())
+    story.append(Paragraph('4. 장비별 작용응력(σ) vs 허용지지력(qa) 비교 그래프', sec))
+    story.append(RLImage(chart_path, width=178*mm, height=89*mm, kind='bound'))
     doc.build(story)
     return path
 
 
-def build_docx(summary_df,matrix_df,selected_thicknesses,params,proj_name,theory_paths,formula_paths,chart_path):
-    doc=Document(); sec=doc.sections[0]; sec.page_width=Mm(210); sec.page_height=Mm(297); sec.top_margin=Mm(12); sec.bottom_margin=Mm(12); sec.left_margin=Mm(12); sec.right_margin=Mm(12)
-    p=doc.add_table(rows=1,cols=2); p.alignment=WD_TABLE_ALIGNMENT.CENTER; p.style='Table Grid'; p.cell(0,0).text='PROJECT'; p.cell(0,1).text=proj_name
-    t=doc.add_paragraph(); t.alignment=WD_ALIGN_PARAGRAPH.CENTER; r=t.add_run('장비주행성 검토 구조계산서'); r.bold=True; r.font.size=Pt(16)
-    doc.add_heading('1. 적용 이론 및 산정식',level=1)
-    for lab,key in [('가. 장비 접지압(P) 자동 산정식','P'),('나. 원지반상 작용응력(σ) — 하중분산 응력법','sigma'),('다. 허용지지력(qa) — Meyerhof and Hanna(1978)','qa')]:
-        doc.add_paragraph(lab).runs[0].bold=True; doc.add_picture(formula_paths[key],width=Mm(175))
-    doc.add_paragraph('설계 적용 매개변수').runs[0].bold=True
-    tb=doc.add_table(rows=2,cols=9); tb.style='Table Grid'; headers=['γ1','c2','φ1','φ2','Ks','θ','T','ε','Fs']; vals=[params['gamma1'],params['c2'],params['phi1'],params['phi2'],params['Ks'],params['theta'],params['T'],params['impact'],params['Fs']]
-    for j,h in enumerate(headers): tb.cell(0,j).text=str(h); tb.cell(1,j).text=f'{vals[j]:.2f}'
+def build_docx(summary_df, matrix_df, selected_thicknesses, params, proj_name, theory_paths, formula_paths, chart_path):
+    doc = Document()
+    sec = doc.sections[0]
+    sec.page_width = Mm(210)
+    sec.page_height = Mm(297)
+    sec.top_margin = Mm(12)
+    sec.bottom_margin = Mm(12)
+    sec.left_margin = Mm(12)
+    sec.right_margin = Mm(12)
+    
+    p = doc.add_table(rows=1, cols=2)
+    p.alignment = WD_TABLE_ALIGNMENT.CENTER
+    p.style = 'Table Grid'
+    p.cell(0, 0).text = 'PROJECT'
+    p.cell(0, 1).text = proj_name
+    
+    t = doc.add_paragraph()
+    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = t.add_run('장비주행성 검토 구조계산서')
+    r.bold = True
+    r.font.size = Pt(16)
+    
+    doc.add_heading('1. 적용 이론 및 산정식', level=1)
+    for lab, key in [('가. 장비 접지압(P) 자동 산정식', 'P'), ('나. 원지반상 작용응력(σ) — 하중분산 응력법', 'sigma'), ('다. 허용지지력(qa) — Meyerhof and Hanna(1978)', 'qa')]:
+        doc.add_paragraph(lab).runs[0].bold = True
+        doc.add_picture(formula_paths[key], width=Mm(175))
+        
+    doc.add_paragraph('설계 적용 매개변수').runs[0].bold = True
+    tb = doc.add_table(rows=2, cols=9)
+    tb.style = 'Table Grid'
+    headers = ['γ1', 'c2', 'φ1', 'φ2', 'Ks', 'θ', 'T', 'ε', 'Fs']
+    vals = [params['gamma1'], params['c2'], params['phi1'], params['phi2'], params['Ks'], params['theta'], params['T'], params['impact'], params['Fs']]
+    for j, h in enumerate(headers):
+        tb.cell(0, j).text = str(h)
+        tb.cell(1, j).text = f'{vals[j]:.2f}'
+        
     doc.add_paragraph('수식 주요 변수: W 장비 총중량, b 접지폭, L 접지길이, H 복토두께, P 접지압, σ 원지반 작용응력, qa 허용지지력, γ1 복토층 단위중량, c2 원지반 점착력, φ1·φ2 내부마찰각, Ks 펀칭전단계수, θ 분산/보강각도, T 토목섬유 허용인장력, Fs 안전율.')
-    doc.add_picture(theory_paths['A'],width=Mm(175)); doc.add_picture(theory_paths['B'],width=Mm(175)); doc.add_page_break()
-    doc.add_heading('2. 복토 두께별 작용응력',level=1)
-    # Word 표는 선택 두께가 많으면 가로폭 문제를 막기 위해 8개씩 분할
-    for start in range(0,len(selected_thicknesses),8):
-        hs=selected_thicknesses[start:start+8]; tb=doc.add_table(rows=1,cols=3+len(hs)); tb.style='Table Grid';
-        for j,h in enumerate(['장비명','규격','P(kPa)']+[f'σ({x:.1f}m)' for x in hs]): tb.cell(0,j).text=str(h)
-        for _,r in matrix_df.iterrows():
-            cells=tb.add_row().cells; vals=[r['장비명'],r['규격'],f"{r['접지압P(kPa)']:.2f}"]+[f"{r.get(f'σ({h:.1f}m)','-'):.2f}" if isinstance(r.get(f'σ({h:.1f}m)'),(int,float)) else '-' for h in hs]
-            for j,v in enumerate(vals): cells[j].text=str(v)
-        if start+8<len(selected_thicknesses): doc.add_page_break()
-    doc.add_page_break(); doc.add_heading('3. 장비주행성 검토결과',level=1)
-    for start in range(0,len(summary_df),15):
-        part=summary_df.iloc[start:start+15]; tb=doc.add_table(rows=1,cols=10); tb.style='Table Grid';
-        headers=['장비명','규격','P(kPa)','b(m)','L(m)','H(m)','σ(kPa)','qa(kPa)','qa/σ','판정']
-        for j,h in enumerate(headers): tb.cell(0,j).text=h
-        for _,r in part.iterrows():
-            vals=[r['장비명'],r['규격'],f"{r['접지압P(kPa)']:.2f}",f"{r['폭b(m)']:.2f}",f"{r['길이L(m)']:.2f}",f"{r['복토두께H(m)']:.1f}",f"{r['작용응력σ(kPa)']:.2f}",f"{r['허용지지력qa(kPa)']:.2f}",f"{r['안전율(qa/σ)']:.2f}",r['판정']]
-            cells=tb.add_row().cells
-            for j,v in enumerate(vals): cells[j].text=str(v)
-        if start+15<len(summary_df): doc.add_page_break()
-    doc.add_page_break(); doc.add_heading('4. 장비별 작용응력(σ) vs 허용지지력(qa) 비교 그래프',level=1); doc.add_picture(chart_path,width=Mm(175))
-    path=tempfile.NamedTemporaryFile(delete=False,suffix='.docx').name; doc.save(path); return path
+    doc.add_picture(theory_paths['A'], width=Mm(175))
+    doc.add_picture(theory_paths['B'], width=Mm(175))
+    doc.add_page_break()
+    
+    doc.add_heading('2. 복토 두께별 작용응력', level=1)
+    for start in range(0, len(selected_thicknesses), 8):
+        hs = selected_thicknesses[start:start+8]
+        tb = doc.add_table(rows=1, cols=3+len(hs))
+        tb.style = 'Table Grid'
+        for j, h in enumerate(['장비명', '규격', 'P(kPa)'] + [f'σ({x:.1f}m)' for x in hs]):
+            tb.cell(0, j).text = str(h)
+        for _, r in matrix_df.iterrows():
+            cells = tb.add_row().cells
+            vals = [r['장비명'], r['규격'], f"{r['접지압P(kPa)']:.2f}"] + [f"{r.get(f'σ({h:.1f}m)','-'):.2f}" if isinstance(r.get(f'σ({h:.1f}m)'), (int, float)) else '-' for h in hs]
+            for j, v in enumerate(vals):
+                cells[j].text = str(v)
+        if start + 8 < len(selected_thicknesses):
+            doc.add_page_break()
+            
+    doc.add_page_break()
+    doc.add_heading('3. 장비주행성 검토결과', level=1)
+    for start in range(0, len(summary_df), 15):
+        part = summary_df.iloc[start:start+15]
+        tb = doc.add_table(rows=1, cols=10)
+        tb.style = 'Table Grid'
+        headers = ['장비명', '규격', 'P(kPa)', 'b(m)', 'L(m)', 'H(m)', 'σ(kPa)', 'qa(kPa)', 'qa/σ', '판정']
+        for j, h in enumerate(headers):
+            tb.cell(0, j).text = h
+        for _, r in part.iterrows():
+            vals = [r['장비명'], r['규격'], f"{r['접지압P(kPa)']:.2f}", f"{r['폭b(m)']:.2f}", f"{r['길이L(m)']:.2f}", f"{r['복토두께H(m)']:.1f}", f"{r['작용응력σ(kPa)']:.2f}", f"{r['허용지지력qa(kPa)']:.2f}", f"{r['안전율(qa/σ)']:.2f}", r['판정']]
+            cells = tb.add_row().cells
+            for j, v in enumerate(vals):
+                cells[j].text = str(v)
+        if start + 15 < len(summary_df):
+            doc.add_page_break()
+            
+    doc.add_page_break()
+    doc.add_heading('4. 장비별 작용응력(σ) vs 허용지지력(qa) 비교 그래프', level=1)
+    doc.add_picture(chart_path, width=Mm(175))
+    path = tempfile.NamedTemporaryFile(delete=False, suffix='.docx').name
+    doc.save(path)
+    return path
 
 
-def build_xlsx(summary_df,matrix_df,selected_thicknesses,params,proj_name,theory_paths,formula_paths,chart_path):
-    wb=Workbook(); ws=wb.active; ws.title='구조계산서'; ws.sheet_view.showGridLines=False
-    thin=Side(style='thin',color='000000'); border=Border(left=thin,right=thin,top=thin,bottom=thin); header_fill=PatternFill('solid',fgColor='E9EEF4')
-    ws.merge_cells('A1:J1'); ws['A1']='장비주행성 검토 구조계산서'; ws['A1'].font=Font(bold=True,size=16); ws['A1'].alignment=Alignment(horizontal='center')
-    ws['A3']='PROJECT'; ws['B3']=proj_name; ws['A3'].font=Font(bold=True); ws['A3'].border=ws['B3'].border=border
-    ws['A5']='1. 적용 이론 및 산정식'; ws['A5'].font=Font(bold=True,size=12)
-    # 수식은 이미지 삽입
-    row=7
-    for lab,key in [('가. 장비 접지압(P) 자동 산정식','P'),('나. 원지반상 작용응력(σ) — 하중분산 응력법','sigma'),('다. 허용지지력(qa) — Meyerhof and Hanna(1978)','qa')]:
-        ws.cell(row,1,lab).font=Font(bold=True); im=XLImage(formula_paths[key]); ratio=im.height/im.width; im.width=650; im.height=int(650*ratio); ws.add_image(im,f'A{row+1}'); row+=6
-    ws.cell(row,1,'설계 적용 매개변수').font=Font(bold=True); row+=1
-    headers=['γ1','c2','φ1','φ2','Ks','θ','T','ε','Fs']; vals=[params['gamma1'],params['c2'],params['phi1'],params['phi2'],params['Ks'],params['theta'],params['T'],params['impact'],params['Fs']]
-    for j,h in enumerate(headers,1): ws.cell(row,j,h); ws.cell(row,j).border=border; ws.cell(row,j).fill=header_fill; ws.cell(row+1,j,vals[j-1]); ws.cell(row+1,j).border=border; ws.cell(row+1,j).alignment=Alignment(horizontal='center')
-    row+=4
-    im=XLImage(theory_paths['A']); ratio=im.height/im.width; im.width=700; im.height=int(700*ratio); ws.add_image(im,f'A{row}'); im2=XLImage(theory_paths['B']); ratio2=im2.height/im2.width; im2.width=700; im2.height=int(700*ratio2); ws.add_image(im2,f'A{row+30}')
-    row+=30
-    ws.cell(row,1,'2. 복토 두께별 작용응력').font=Font(bold=True,size=12); row+=1
-    for start in range(0,len(selected_thicknesses),8):
-        hs=selected_thicknesses[start:start+8]; hdr=['장비명','규격','P(kPa)']+[f'σ({h:.1f}m)' for h in hs]
-        for j,h in enumerate(hdr,1): ws.cell(row,j,h); ws.cell(row,j).border=border; ws.cell(row,j).fill=header_fill; ws.cell(row,j).alignment=Alignment(horizontal='center',wrap_text=True)
-        for _,r in matrix_df.iterrows():
-            row+=1; vals=[r['장비명'],r['규격'],r['접지압P(kPa)']]+[r.get(f'σ({h:.1f}m)','-') for h in hs]
-            for j,v in enumerate(vals,1): ws.cell(row,j,v); ws.cell(row,j).border=border; ws.cell(row,j).alignment=Alignment(horizontal='center')
-        row+=2
-    row+=1; ws.cell(row,1,'3. 장비주행성 검토결과').font=Font(bold=True,size=12); row+=1
-    hdr=['장비명','규격','P(kPa)','b(m)','L(m)','H(m)','σ(kPa)','qa(kPa)','qa/σ','판정']
-    for j,h in enumerate(hdr,1): ws.cell(row,j,h); ws.cell(row,j).border=border; ws.cell(row,j).fill=header_fill; ws.cell(row,j).alignment=Alignment(horizontal='center')
-    for _,r in summary_df.iterrows():
-        row+=1; vals=[r['장비명'],r['규격'],r['접지압P(kPa)'],r['폭b(m)'],r['길이L(m)'],r['복토두께H(m)'],r['작용응력σ(kPa)'],r['허용지지력qa(kPa)'],r['안전율(qa/σ)'],r['판정']]
-        for j,v in enumerate(vals,1): ws.cell(row,j,v); ws.cell(row,j).border=border; ws.cell(row,j).alignment=Alignment(horizontal='center')
-    row+=3; ws.cell(row,1,'4. 장비별 작용응력(σ) vs 허용지지력(qa) 비교 그래프').font=Font(bold=True,size=12); row+=1
-    im=XLImage(chart_path); ratio=im.height/im.width; im.width=700; im.height=int(700*ratio); ws.add_image(im,f'A{row}')
-    for col,w in {'A':18,'B':14,'C':12,'D':10,'E':10,'F':10,'G':12,'H':12,'I':10,'J':10}.items(): ws.column_dimensions[col].width=w
-    ws.freeze_panes='A6'; ws.print_area=f'A1:J{row+28}'; ws.page_setup.paperSize=ws.PAPERSIZE_A4; ws.page_setup.orientation='landscape'; ws.page_setup.fitToWidth=1; ws.page_setup.fitToHeight=0; ws.sheet_properties.pageSetUpPr.fitToPage=True
-    ws.page_margins.left=.25; ws.page_margins.right=.25; ws.page_margins.top=.35; ws.page_margins.bottom=.35; ws.print_options.horizontalCentered=True
-    path=tempfile.NamedTemporaryFile(delete=False,suffix='.xlsx').name; wb.save(path); return path
+def build_xlsx(summary_df, matrix_df, selected_thicknesses, params, proj_name, theory_paths, formula_paths, chart_path):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '구조계산서'
+    ws.sheet_view.showGridLines = False
+    thin = Side(style='thin', color='000000')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    header_fill = PatternFill('solid', fgColor='E9EEF4')
+    
+    ws.merge_cells('A1:J1')
+    ws['A1'] = '장비주행성 검토 구조계산서'
+    ws['A1'].font = Font(bold=True, size=16)
+    ws['A1'].alignment = Alignment(horizontal='center')
+    
+    ws['A3'] = 'PROJECT'
+    ws['B3'] = proj_name
+    ws['A3'].font = Font(bold=True)
+    ws['A3'].border = ws['B3'].border = border
+    
+    ws['A5'] = '1. 적용 이론 및 산정식'
+    ws['A5'].font = Font(bold=True, size=12)
+    
+    row = 7
+    for lab, key in [('가. 장비 접지압(P) 자동 산정식', 'P'), ('나. 원지반상 작용응력(σ) — 하중분산 응력법', 'sigma'), ('다. 허용지지력(qa) — Meyerhof and Hanna(1978)', 'qa')]:
+        ws.cell(row, 1, lab).font = Font(bold=True)
+        im = XLImage(formula_paths[key])
+        ratio = im.height / im.width
+        im.width = 650
+        im.height = int(650 * ratio)
+        ws.add_image(im, f'A{row+1}')
+        row += 6
+        
+    ws.cell(row, 1, '설계 적용 매개변수').font = Font(bold=True)
+    row += 1
+    headers = ['γ1', 'c2', 'φ1', 'φ2', 'Ks', 'θ', 'T', 'ε', 'Fs']
+    vals = [params['gamma1'], params['c2'], params['phi1'], params['phi2'], params['Ks'], params['theta'], params['T'], params['impact'], params['Fs']]
+    for j, h in enumerate(headers, 1):
+        ws.cell(row, j, h)
+        ws.cell(row, j).border = border
+        ws.cell(row, j).fill = header_fill
+        ws.cell(row+1, j, vals[j-1])
+        ws.cell(row+1, j).border = border
+        ws.cell(row+1, j).alignment = Alignment(horizontal='center')
+        
+    row += 4
+    im = XLImage(theory_paths['A'])
+    ratio = im.height / im.width
+    im.width = 700
+    im.height = int(700 * ratio)
+    ws.add_image(im, f'A{row}')
+    
+    im2 = XLImage(theory_paths['B'])
+    ratio2 = im2.height / im2.width
+    im2.width = 700
+    im2.height = int(700 * ratio2)
+    ws.add_image(im2, f'A{row+30}')
+    
+    row += 30
+    ws.cell(row, 1, '2. 복토 두께별 작용응력').font = Font(bold=True, size=12)
+    row += 1
+    for start in range(0, len(selected_thicknesses), 8):
+        hs = selected_thicknesses[start:start+8]
+        hdr = ['장비명', '규격', 'P(kPa)'] + [f'σ({h:.1f}m)' for h in hs]
+        for j, h in enumerate(hdr, 1):
+            ws.cell(row, j, h)
+            ws.cell(row, j).border = border
+            ws.cell(row, j).fill = header_fill
+            ws.cell(row, j).alignment = Alignment(horizontal='center', wrap_text=True)
+        for _, r in matrix_df.iterrows():
+            row += 1
+            vals = [r['장비명'], r['규격'], r['접지압P(kPa)']] + [r.get(f'σ({h:.1f}m)', '-') for h in hs]
+            for j, v in enumerate(vals, 1):
+                ws.cell(row, j, v)
+                ws.cell(row, j).border = border
+                ws.cell(row, j).alignment = Alignment(horizontal='center')
+        row += 2
+        
+    row += 1
+    ws.cell(row, 1, '3. 장비주행성 검토결과').font = Font(bold=True, size=12)
+    row += 1
+    hdr = ['장비명', '규격', 'P(kPa)', 'b(m)', 'L(m)', 'H(m)', 'σ(kPa)', 'qa(kPa)', 'qa/σ', '판정']
+    for j, h in enumerate(hdr, 1):
+        ws.cell(row, j, h)
+        ws.cell(row, j).border = border
+        ws.cell(row, j).fill = header_fill
+        ws.cell(row, j).alignment = Alignment(horizontal='center')
+    for _, r in summary_df.iterrows():
+        row += 1
+        vals = [r['장비명'], r['규격'], r['접지압P(kPa)'], r['폭b(m)'], r['길이L(m)'], r['복토두께H(m)'], r['작용응력σ(kPa)'], r['허용지지력qa(kPa)'], r['안전율(qa/σ)'], r['판정']]
+        for j, v in enumerate(vals, 1):
+            ws.cell(row, j, v)
+            ws.cell(row, j).border = border
+            ws.cell(row, j).alignment = Alignment(horizontal='center')
+            
+    row += 3
+    ws.cell(row, 1, '4. 장비별 작용응력(σ) vs 허용지지력(qa) 비교 그래프').font = Font(bold=True, size=12)
+    row += 1
+    im = XLImage(chart_path)
+    ratio = im.height / im.width
+    im.width = 700
+    im.height = int(700 * ratio)
+    ws.add_image(im, f'A{row}')
+    
+    for col, w in {'A': 18, 'B': 14, 'C': 12, 'D': 10, 'E': 10, 'F': 10, 'G': 12, 'H': 12, 'I': 10, 'J': 10}.items():
+        ws.column_dimensions[col].width = w
+        
+    ws.freeze_panes = 'A6'
+    ws.print_area = f'A1:J{row+28}'
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_margins.left = .25
+    ws.page_margins.right = .25
+    ws.page_margins.top = .35
+    ws.page_margins.bottom = .35
+    ws.print_options.horizontalCentered = True
+    
+    path = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx').name
+    wb.save(path)
+    return path
 
 
 if st.checkbox("🖨️ 인쇄용 구조계산서 양식 열기", value=False, key="open_print_calc_sheet"):
     if "last_summary" not in st.session_state:
         st.warning("위의 [▶ 검토 실행] 버튼을 눌러 계산 결과를 먼저 생성하세요.")
     else:
-        summary_df=st.session_state.last_summary; matrix_df=st.session_state.last_matrix
+        summary_df = st.session_state.last_summary
+        matrix_df = st.session_state.last_matrix
         st.markdown("### 장비주행성 검토 구조계산서")
         st.markdown(f"**PROJECT:** {proj_name}")
         st.markdown("#### 1. 적용 이론 및 산정식")
         st.latex(r"P=\frac{W}{2bL}\quad(덤프트럭: P=\frac{0.4W}{bL})")
         st.latex(r"\sigma=\frac{PbL(1+\varepsilon)}{(b+2H\tan\theta)(L+2H\tan\theta)}+\gamma_1H")
         st.latex(r"q_a=\frac{1}{F_s}[ (1+0.2b/L)c_2N_{c(2)}F_{cs(2)}F_{cd(2)}+\gamma_1H^2(1+b/L)K_s\tan\phi_1/b+2T\sin\theta/(b+H)]")
-        c1,c2c=st.columns(2)
-        with c1: st.image(f"data:image/png;base64,{THEORY_IMG_A}",caption='Meyerhof-Hanna 층상지반 파괴 메커니즘',use_container_width=True)
-        with c2c: st.image(f"data:image/png;base64,{THEORY_IMG_B}",caption='하중분산 응력 모델 개념도',use_container_width=True)
+        c1, c2c = st.columns(2)
+        with c1:
+            st.image(f"data:image/png;base64,{THEORY_IMG_A}", caption='Meyerhof-Hanna 층상지반 파괴 메커니즘', use_container_width=True)
+        with c2c:
+            st.image(f"data:image/png;base64,{THEORY_IMG_B}", caption='하중분산 응력 모델 개념도', use_container_width=True)
         st.markdown("#### 2. 복토 두께별 작용응력")
-        st.dataframe(matrix_df,use_container_width=True,hide_index=True, key='print_calc_matrix_df')
+        st.dataframe(matrix_df, use_container_width=True, hide_index=True, key='print_calc_matrix_df')
         st.markdown("#### 3. 장비주행성 검토결과")
-        st.dataframe(summary_df,use_container_width=True,hide_index=True, key='print_calc_summary_df')
+        st.dataframe(summary_df, use_container_width=True, hide_index=True, key='print_calc_summary_df')
         st.markdown("#### 4. 장비별 작용응력(σ) vs 허용지지력(qa) 비교 그래프")
-        if 'last_fig' in st.session_state: st.plotly_chart(st.session_state.last_fig,use_container_width=True, key="print_calc_chart")
+        if 'last_fig' in st.session_state:
+            st.plotly_chart(st.session_state.last_fig, use_container_width=True, key="print_calc_chart")
 
         if st.button('📦 A4 구조계산서 파일 생성', key='generate_a4_calc_files'):
             with st.spinner('PDF·Word·Excel을 A4 인쇄용으로 생성 중입니다...'):
                 # 이론 삽도 파일
-                a_path=_img_from_b64(THEORY_IMG_A); b_path=_img_from_b64(THEORY_IMG_B)
-                formula_bytes=_make_formula_images(); formula_paths={k:_img_from_b64(base64.b64encode(v).decode()) for k,v in formula_bytes.items()}
-                chart_bytes=_make_chart_png(summary_df); chart_path=_img_from_b64(base64.b64encode(chart_bytes).decode())
-                params={'gamma1':gamma1,'c2':c2,'phi1':phi1,'phi2':phi2,'Ks':ks_lookup(phi1),'theta':theta_geo,'T':T_allow,'impact':impact,'Fs':Fs}
-                pdf_path=build_pdf(summary_df,matrix_df,selected_thicknesses,params,proj_name,{'A':a_path,'B':b_path},formula_paths,chart_path)
-                docx_path=build_docx(summary_df,matrix_df,selected_thicknesses,params,proj_name,{'A':a_path,'B':b_path},formula_paths,chart_path)
-                xlsx_path=build_xlsx(summary_df,matrix_df,selected_thicknesses,params,proj_name,{'A':a_path,'B':b_path},formula_paths,chart_path)
-                with open(pdf_path,'rb') as f: pdf_data=f.read()
-                with open(docx_path,'rb') as f: docx_data=f.read()
-                with open(xlsx_path,'rb') as f: xlsx_data=f.read()
-                st.session_state.generated_files={'pdf':pdf_data,'docx':docx_data,'xlsx':xlsx_data}
+                a_path = _img_from_b64(THEORY_IMG_A)
+                b_path = _img_from_b64(THEORY_IMG_B)
+                formula_bytes = _make_formula_images()
+                formula_paths = {k: _img_from_b64(base64.b64encode(v).decode()) for k, v in formula_bytes.items()}
+                chart_bytes = _make_chart_png(summary_df)
+                chart_path = _img_from_b64(base64.b64encode(chart_bytes).decode())
+                params = {
+                    'gamma1': gamma1, 'c2': c2, 'phi1': phi1, 'phi2': phi2,
+                    'Ks': ks_lookup(phi1), 'theta': theta_geo, 'T': T_allow,
+                    'impact': impact, 'Fs': Fs
+                }
+                pdf_path = build_pdf(summary_df, matrix_df, selected_thicknesses, params, proj_name, {'A': a_path, 'B': b_path}, formula_paths, chart_path)
+                docx_path = build_docx(summary_df, matrix_df, selected_thicknesses, params, proj_name, {'A': a_path, 'B': b_path}, formula_paths, chart_path)
+                xlsx_path = build_xlsx(summary_df, matrix_df, selected_thicknesses, params, proj_name, {'A': a_path, 'B': b_path}, formula_paths, chart_path)
+                
+                with open(pdf_path, 'rb') as f:
+                    pdf_data = f.read()
+                with open(docx_path, 'rb') as f:
+                    docx_data = f.read()
+                with open(xlsx_path, 'rb') as f:
+                    xlsx_data = f.read()
+                st.session_state.generated_files = {'pdf': pdf_data, 'docx': docx_data, 'xlsx': xlsx_data}
+                
         if 'generated_files' in st.session_state:
             st.success('A4 구조계산서 파일이 생성되었습니다. 각 파일은 수식·삽도·결과 그래프를 포함합니다.')
-            st.download_button('📄 PDF 다운로드',st.session_state.generated_files['pdf'],'장비주행성_구조계산서_A4.pdf','application/pdf', key='download_a4_pdf')
-            st.download_button('📝 Word 다운로드',st.session_state.generated_files['docx'],'장비주행성_구조계산서_A4.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document', key='download_a4_docx')
-            st.download_button('📊 Excel 다운로드',st.session_state.generated_files['xlsx'],'장비주행성_구조계산서_A4.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key='download_a4_xlsx')
+            st.download_button('📄 PDF 다운로드', st.session_state.generated_files['pdf'], '장비주행성_구조계산서_A4.pdf', 'application/pdf', key='download_a4_pdf')
+            st.download_button('📝 Word 다운로드', st.session_state.generated_files['docx'], '장비주행성_구조계산서_A4.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', key='download_a4_docx')
+            st.download_button('📊 Excel 다운로드', st.session_state.generated_files['xlsx'], '장비주행성_구조계산서_A4.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key='download_a4_xlsx')
